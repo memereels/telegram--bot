@@ -1,61 +1,47 @@
 from flask import Flask, request
-from telegram import Bot, Update
-from telegram.ext import Dispatcher, CommandHandler
-import random
-import threading
-import time
+import telegram
 import os
+import random
 
-# ✅ Bot Token
-BOT_TOKEN = '8064010533:AAHvbYSVOnOlJPznMQ13LaeT3zc6yFZrAos'
-bot = Bot(token=BOT_TOKEN)
+TOKEN = "8064010533:AAHvbYSVOnOlJPznMQ13LaeT3zc6yFZrAos"
+CHANNEL_USERNAME = "@kyahalhaibhai"  # Aapka channel name
 
-# ✅ Flask App Initialization
+bot = telegram.Bot(token=TOKEN)
 app = Flask(__name__)
 
-# ✅ Channel Username
-CHANNEL_USERNAME = '@kyahalhaibhai'
+# Function to send random video from the channel
+def send_random_video(chat_id):
+    try:
+        # Fetch the latest 100 messages from the channel
+        updates = bot.get_chat(CHANNEL_USERNAME).get_history(limit=100)
 
-# ✅ Sample Video Links
-videos = [
-    'https://t.me/kyahalhaibhai/1',
-    'https://t.me/kyahalhaibhai/2',
-    'https://t.me/kyahalhaibhai/3'
-]
+        # Filter only video messages
+        videos = [msg for msg in updates if msg.video]
 
-# ✅ Start Command Handler
-def start(update, context):
-    update.message.reply_text("Welcome! Type /getvideo to receive a random video.")
+        if videos:
+            random_video = random.choice(videos)
+            bot.send_video(chat_id=chat_id, video=random_video.video.file_id)
+        else:
+            bot.send_message(chat_id=chat_id, text="No videos found in the channel.")
+    except Exception as e:
+        bot.send_message(chat_id=chat_id, text=f"Error: {e}")
 
-# ✅ Get Video Command Handler
-def get_video(update, context):
-    video_link = random.choice(videos)
-    message = update.message.reply_text(f"Here's your video: {video_link}")
-
-    # ✅ Auto-delete after 15 minutes
-    def delete_message():
-        time.sleep(900)  # 900 seconds = 15 minutes
-        try:
-            context.bot.delete_message(chat_id=update.effective_chat.id, message_id=message.message_id)
-        except:
-            pass
-
-    threading.Thread(target=delete_message).start()
-
-# ✅ Dispatcher for Handling Commands
-dispatcher = Dispatcher(bot, None, workers=0)
-dispatcher.add_handler(CommandHandler("start", start))
-dispatcher.add_handler(CommandHandler("getvideo", get_video))
-
-# ✅ Webhook for Telegram
-@app.route(f'/{BOT_TOKEN}', methods=['POST'])
+@app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
-    update = Update.de_json(request.get_json(force=True), bot)
-    dispatcher.process_update(update)
+    update = telegram.Update.de_json(request.get_json(force=True), bot)
+    chat_id = update.message.chat.id
+    message = update.message.text
+
+    if message == '/start':
+        bot.send_message(chat_id=chat_id, text="Welcome to the bot!")
+    elif message == '/getvideo':
+        send_random_video(chat_id)
+    else:
+        bot.send_message(chat_id=chat_id, text="Invalid command. Use /getvideo to get a video.")
+
     return 'ok'
 
-# ✅ Server Run on Render
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8080))  # Correct port for Render
+    port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
     
