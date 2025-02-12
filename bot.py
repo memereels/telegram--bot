@@ -1,49 +1,60 @@
-from telegram import Bot
-from telegram.ext import Updater, CommandHandler
+from flask import Flask, request
+from telegram import Bot, Update
+from telegram.ext import Dispatcher, CommandHandler
 import random
-import time
 import threading
+import time
+import os
 
 # Telegram Bot Token
 BOT_TOKEN = '8064010533:AAHvbYSVOnOlJPznMQ13LaeT3zc6yFZrAos'
+bot = Bot(token=BOT_TOKEN)
 
-# Channel username jahan videos hain
+# Flask app
+app = Flask(__name__)
+
+# Channel username
 CHANNEL_USERNAME = '@kyahalhaibhai'
 
-# Video list (apne actual video links yahan add karo)
+# Sample video links
 videos = [
     'https://t.me/kyahalhaibhai/1',
     'https://t.me/kyahalhaibhai/2',
     'https://t.me/kyahalhaibhai/3'
 ]
 
-# Bot ke functions
+# Start command
 def start(update, context):
-    update.message.reply_text("Welcome! Type 'get video' to receive a random video.")
+    update.message.reply_text("Welcome! Type /getvideo to receive a random video.")
 
+# Get video command
 def get_video(update, context):
     video_link = random.choice(videos)
     message = update.message.reply_text(f"Here's your video: {video_link}")
-    
-    # 15 minute baad message delete karne ka function
+
+    # Auto-delete after 15 mins
     def delete_message():
-        time.sleep(900)  # 900 seconds = 15 minutes
+        time.sleep(900)
         try:
             context.bot.delete_message(chat_id=update.effective_chat.id, message_id=message.message_id)
         except:
             pass
-    
+
     threading.Thread(target=delete_message).start()
 
-# Main function
-def main():
-    updater = Updater(BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("getvideo", get_video))
-    
-    updater.start_polling()
-    updater.idle()
+# Dispatcher
+dispatcher = Dispatcher(bot, None, workers=0)
+dispatcher.add_handler(CommandHandler("start", start))
+dispatcher.add_handler(CommandHandler("getvideo", get_video))
 
+# Webhook endpoint
+@app.route(f'/{BOT_TOKEN}', methods=['POST'])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), bot)
+    dispatcher.process_update(update)
+    return 'ok'
+
+# ✅ Port Binding Fix
 if __name__ == '__main__':
-    main()
+    port = int(os.environ.get('PORT', 10000))  # Render will detect this port
+    app.run(host='0.0.0.0', port=port)
